@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Viewer — Sistema de Diferidos</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:    #090909;
+  --bg2:   #0f0f0f;
+  --bg3:   #151515;
+  --bg4:   #1c1c1c;
+  --line:  #222222;
+  --line2: #2a2a2a;
+  --txt:   #e4e4e4;
+  --mute:  #585858;
+  --mute2: #3a3a3a;
+  --white: #ffffff;
+  --grn:   #4dbe82;
+  --amb:   #d4a843;
+  --red:   #c96060;
+  --blu:   #5d9fd4;
+  --acc:   #c8a55a;
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+  --r: 5px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+
+body{
+  font-family:var(--sans);
+  background:var(--bg);
+  color:var(--txt);
+  display:flex;
+  flex-direction:column;
+  position:relative;
+}
+/* dot grid */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:radial-gradient(circle,rgba(255,255,255,0.045) 1px,transparent 1px);
+  background-size:24px 24px;
+  pointer-events:none;z-index:0;
+}
+
+/* ─── TOPBAR ─── */
+.topbar{
+  position:relative;z-index:10;
+  background:var(--bg2);
+  border-bottom:1px solid var(--line);
+  height:52px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 1.5rem;
+  flex-shrink:0;
+}
+.tb-left{display:flex;align-items:center;gap:14px}
+.db-icon{
+  width:30px;height:30px;
+  background:var(--white);
+  border-radius:4px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;
+  color:var(--bg);font-family:var(--mono);
+}
+.db-name{font-family:var(--mono);font-size:.82rem;font-weight:600;color:var(--white);letter-spacing:.03em}
+.db-sub{font-family:var(--mono);font-size:.62rem;color:var(--mute);letter-spacing:.06em;margin-top:1px}
+.tb-right{display:flex;align-items:center;gap:12px}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sync-label{font-family:var(--mono);font-size:.65rem;color:var(--mute);letter-spacing:.05em}
+.tb-btn{
+  background:var(--bg4);border:1px solid var(--line2);
+  color:var(--txt);font-family:var(--sans);font-size:.72rem;font-weight:600;
+  padding:6px 14px;border-radius:var(--r);cursor:pointer;
+  letter-spacing:.04em;text-transform:uppercase;transition:all .18s;
+}
+.tb-btn:hover{border-color:var(--mute);color:var(--white)}
+.app-link{
+  background:var(--white);border:none;
+  color:var(--bg);font-family:var(--sans);font-size:.72rem;font-weight:700;
+  padding:6px 14px;border-radius:var(--r);cursor:pointer;
+  letter-spacing:.04em;text-transform:uppercase;text-decoration:none;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.app-link:hover{opacity:.88}
+
+/* ─── BODY LAYOUT ─── */
+.layout{
+  display:flex;flex:1;overflow:hidden;position:relative;z-index:1;
+}
+
+/* ─── SIDEBAR ─── */
+.sidebar{
+  width:240px;flex-shrink:0;
+  background:var(--bg2);
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;
+  overflow-y:auto;
+}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--line2)}
+
+.sb-section{border-bottom:1px solid var(--line);padding:1rem}
+.sb-label{
+  font-family:var(--mono);font-size:.6rem;font-weight:600;
+  text-transform:uppercase;letter-spacing:.12em;
+  color:var(--mute);margin-bottom:.75rem;
+}
+
+/* DB stats */
+.db-stat{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
+.db-stat-key{font-family:var(--mono);font-size:.68rem;color:var(--mute)}
+.db-stat-val{font-family:var(--mono);font-size:.72rem;font-weight:600;color:var(--txt)}
+
+/* Nav */
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 10px;border-radius:var(--r);cursor:pointer;
+  font-size:.82rem;font-weight:500;
+  color:var(--mute);margin-bottom:2px;transition:all .15s;
+}
+.nav-item:hover{background:var(--bg3);color:var(--txt)}
+.nav-item.active{background:var(--bg4);color:var(--white);border:1px solid var(--line2)}
+.nav-icon{font-size:.85rem;width:18px;text-align:center;flex-shrink:0}
+.nav-badge{
+  margin-left:auto;font-family:var(--mono);font-size:.6rem;
+  background:var(--amb);color:var(--bg);
+  padding:1px 6px;border-radius:10px;font-weight:700;
+}
+
+/* Schema mini */
+.schema-mini{font-family:var(--mono);font-size:.62rem;color:var(--mute);line-height:1.8}
+.schema-table{margin-bottom:.6rem}
+.schema-tname{color:var(--acc);font-weight:600;font-size:.65rem}
+.schema-field{padding-left:.75rem;display:flex;gap:.4rem}
+.sf-pk{color:var(--amb)}
+.sf-fk{color:var(--blu)}
+.sf-type{color:var(--mute2)}
+
+/* ─── MAIN ─── */
+.main{
+  flex:1;overflow-y:auto;display:flex;flex-direction:column;
+}
+.main::-webkit-scrollbar{width:5px}
+.main::-webkit-scrollbar-thumb{background:var(--line2)}
+
+.view{display:none;flex:1;flex-direction:column}
+.view.active{display:flex}
+
+/* ─── VIEW HEADER ─── */
+.view-header{
+  padding:1.5rem 2rem 1rem;
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:flex-start;justify-content:space-between;
+  flex-shrink:0;
+}
+.vh-title{font-family:var(--mono);font-size:1rem;font-weight:600;color:var(--white);margin-bottom:3px}
+.vh-sub{font-family:var(--mono);font-size:.65rem;color:var(--mute)}
+.vh-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+
+/* ─── DASHBOARD ─── */
+.view-content{padding:1.5rem 2rem;flex:1}
+
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem}
+.stat-card{
+  background:var(--bg2);border:1px solid var(--line);
+  border-radius:var(--r);padding:1.1rem 1.2rem;position:relative;overflow:hidden;
+}
+.stat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--card-accent,var(--line2));
+}
+.sc-label{font-family:var(--mono);font-size:.6rem;color:var(--mute);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem}
+.sc-num{font-family:var(--mono);font-size:2rem;font-weight:600;color:var(--card-accent,var(--txt));margin-bottom:4px;line-height:1}
+.sc-sub{font-family:var(--mono);font-size:.6rem;color:var(--mute)}
+
+.charts-row{display:grid;grid-template-columns:1fr 1fr 1.6fr;gap:1rem;margin-bottom:1.5rem}
+.chart-card{
+  background:var(--bg2);border:1px solid var(--line);
+  border-radius:var(--r);padding:1.1rem;
+}
+.chart-title{font-family:var(--mono);font-size:.65rem;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:.08em;margin-bottom:1rem}
+.chart-area{position:relative}
+
+/* BAR chart */
+.bar-group{margin-bottom:.55rem}
+.bar-label{font-family:var(--mono);font-size:.62rem;color:var(--mute);margin-bottom:3px;display:flex;justify-content:space-between}
+.bar-track{background:var(--bg4);border-radius:2px;height:7px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;transition:width .6s ease}
+
+/* Donut */
+.donut-wrap{display:flex;align-items:center;gap:1rem}
+.donut-legend{font-family:var(--mono);font-size:.62rem}
+.legend-item{display:flex;align-items:center;gap:6px;margin-bottom:.4rem}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* Timeline bars */
+.tl-bars{display:flex;align-items:flex-end;gap:3px;height:70px}
+.tl-bar{flex:1;border-radius:2px 2px 0 0;min-height:3px;transition:height .5s ease;cursor:default;position:relative}
+.tl-bar:hover::after{
+  content:attr(data-tip);
+  position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);
+  background:var(--bg4);border:1px solid var(--line2);
+  font-family:var(--mono);font-size:.58rem;color:var(--txt);
+  padding:3px 7px;border-radius:3px;white-space:nowrap;z-index:10;pointer-events:none;
+}
+.tl-labels{display:flex;gap:3px;margin-top:4px}
+.tl-lbl{flex:1;font-family:var(--mono);font-size:.55rem;color:var(--mute);text-align:center;overflow:hidden}
+
+/* Recent activity */
+.recent-card{
+  background:var(--bg2);border:1px solid var(--line);
+  border-radius:var(--r);padding:1.1rem;margin-bottom:1rem;
+}
+.recent-row{
+  display:flex;align-items:center;gap:.75rem;
+  padding:7px 0;border-bottom:1px solid var(--line);font-size:.82rem;
+}
+.recent-row:last-child{border-bottom:none}
+.rr-id{font-family:var(--mono);font-size:.68rem;color:var(--mute);min-width:100px}
+.rr-name{flex:1;color:var(--txt);font-size:.82rem}
+.rr-date{font-family:var(--mono);font-size:.62rem;color:var(--mute)}
+
+/* ─── RECORDS VIEW ─── */
+.records-toolbar{
+  display:flex;gap:.6rem;padding:1rem 2rem;
+  border-bottom:1px solid var(--line);
+  background:var(--bg2);flex-shrink:0;flex-wrap:wrap;align-items:center;
+}
+input.t-search{
+  flex:1;min-width:200px;
+  background:var(--bg3);border:1px solid var(--line2);
+  color:var(--txt);font-family:var(--mono);font-size:.75rem;
+  padding:7px 12px;border-radius:var(--r);outline:none;
+}
+input.t-search::placeholder{color:var(--mute)}
+input.t-search:focus{border-color:var(--mute)}
+select.t-filter{
+  background:var(--bg3);border:1px solid var(--line2);
+  color:var(--txt);font-family:var(--mono);font-size:.72rem;
+  padding:7px 10px;border-radius:var(--r);cursor:pointer;outline:none;
+}
+.t-count{font-family:var(--mono);font-size:.65rem;color:var(--mute);margin-left:.5rem}
+
+/* Table */
+.tbl-wrap{flex:1;overflow:auto}
+.tbl-wrap::-webkit-scrollbar{height:5px;width:5px}
+.tbl-wrap::-webkit-scrollbar-thumb{background:var(--line2)}
+
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+thead{position:sticky;top:0;z-index:5;background:var(--bg2)}
+th{
+  padding:10px 14px;
+  font-family:var(--mono);font-size:.6rem;font-weight:600;
+  text-transform:uppercase;letter-spacing:.09em;color:var(--mute);
+  border-bottom:1px solid var(--line);text-align:left;
+  white-space:nowrap;cursor:pointer;user-select:none;
+}
+th:hover{color:var(--txt)}
+th.sorted{color:var(--acc)}
+th .sort-arrow{margin-left:4px;opacity:.6}
+td{
+  padding:11px 14px;border-bottom:1px solid var(--line);
+  vertical-align:middle;
+}
+tr:hover td{background:rgba(255,255,255,.018)}
+.tr-expanded td{background:rgba(255,255,255,.025)}
+
+.mono{font-family:var(--mono)}
+.muted{color:var(--mute)}
+.id-cell{font-family:var(--mono);font-size:.7rem;color:var(--mute)}
+.name-cell{font-weight:500;color:var(--white)}
+.date-cell{font-family:var(--mono);font-size:.68rem;color:var(--mute)}
+
+/* Status badge */
+.sb{display:inline-flex;align-items:center;gap:4px;
+    padding:2px 9px;border-radius:12px;
+    font-family:var(--mono);font-size:.62rem;font-weight:600;letter-spacing:.04em}
+.sb::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+.sb-pend{color:var(--amb);border:1px solid rgba(212,168,67,.3);background:rgba(212,168,67,.08)}
+.sb-appr{color:var(--grn);border:1px solid rgba(77,190,130,.3);background:rgba(77,190,130,.08)}
+.sb-reje{color:var(--red);border:1px solid rgba(201,96,96,.3);background:rgba(201,96,96,.08)}
+
+/* Expand row */
+.expand-btn{
+  background:none;border:1px solid var(--line2);color:var(--mute);
+  width:22px;height:22px;border-radius:3px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:.75rem;transition:all .15s;font-family:var(--mono);
+}
+.expand-btn:hover{border-color:var(--mute);color:var(--txt)}
+.expand-btn.open{background:var(--bg4);color:var(--txt);transform:rotate(90deg)}
+
+/* Expanded detail row */
+.detail-row td{padding:0;border-bottom:1px solid var(--line)}
+.detail-inner{
+  background:var(--bg3);
+  padding:1.25rem 1.5rem 1.25rem 3rem;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;
+}
+.di{font-family:var(--mono)}
+.di-label{font-size:.58rem;color:var(--mute);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+.di-val{font-size:.72rem;color:var(--txt)}
+.pago-block{
+  grid-column:1/-1;
+  background:var(--bg4);border:1px solid var(--line2);
+  border-radius:var(--r);padding:.9rem 1rem;margin-top:.5rem;
+}
+.pago-block-title{font-size:.6rem;color:var(--acc);font-weight:600;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.6rem}
+.pago-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
+
+/* Pagination */
+.pagination{
+  display:flex;align-items:center;gap:.4rem;
+  padding:.75rem 2rem;border-top:1px solid var(--line);
+  background:var(--bg2);flex-shrink:0;
+}
+.pg-btn{
+  background:var(--bg3);border:1px solid var(--line2);color:var(--mute);
+  font-family:var(--mono);font-size:.68rem;padding:4px 10px;border-radius:3px;
+  cursor:pointer;transition:all .15s;
+}
+.pg-btn:hover{border-color:var(--mute);color:var(--txt)}
+.pg-btn.active{background:var(--bg4);color:var(--white);border-color:var(--mute2)}
+.pg-btn:disabled{opacity:.3;cursor:default}
+.pg-info{font-family:var(--mono);font-size:.62rem;color:var(--mute);margin:0 .5rem}
+
+/* ─── SCHEMA VIEW ─── */
+.schema-content{padding:1.5rem 2rem;flex:1;overflow-y:auto}
+.schema-erd{display:flex;gap:3rem;flex-wrap:wrap;margin-bottom:2rem}
+.erd-table{
+  background:var(--bg2);border:1px solid var(--line2);
+  border-radius:var(--r);min-width:280px;
+}
+.erd-thead{
+  background:var(--bg4);padding:.75rem 1rem;
+  border-bottom:1px solid var(--line2);border-radius:var(--r) var(--r) 0 0;
+  font-family:var(--mono);font-size:.72rem;font-weight:600;color:var(--acc);
+  display:flex;align-items:center;gap:8px;
+}
+.erd-thead .tbl-icon{
+  width:20px;height:20px;background:var(--acc);color:var(--bg);
+  border-radius:3px;display:flex;align-items:center;justify-content:center;
+  font-size:.65rem;font-weight:700;
+}
+.erd-row{
+  display:flex;align-items:center;gap:.5rem;
+  padding:.4rem 1rem;border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:.68rem;
+}
+.erd-row:last-child{border-bottom:none}
+.erd-key{
+  width:20px;height:14px;border-radius:2px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.5rem;font-weight:700;flex-shrink:0;
+}
+.k-pk{background:var(--amb);color:var(--bg)}
+.k-fk{background:var(--blu);color:var(--bg)}
+.k-blank{background:transparent}
+.erd-fname{color:var(--txt);flex:1}
+.erd-ftype{color:var(--mute);font-size:.6rem}
+.erd-fdesc{color:var(--mute2);font-size:.58rem;grid-column:1/-1}
+
+.rel-arrow{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;padding-top:2rem;
+}
+.rel-line{width:2px;height:40px;background:var(--line2)}
+.rel-label{font-family:var(--mono);font-size:.6rem;color:var(--mute)}
+.rel-tip{font-size:.75rem;color:var(--mute)}
+
+/* Field reference table */
+.ref-table{width:100%;border-collapse:collapse;font-size:.78rem;margin-bottom:1.5rem}
+.ref-table th{
+  padding:8px 12px;font-family:var(--mono);font-size:.6rem;
+  text-transform:uppercase;letter-spacing:.08em;color:var(--mute);
+  border-bottom:2px solid var(--line2);text-align:left;
+}
+.ref-table td{
+  padding:8px 12px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:.68rem;
+}
+.ref-table tr:hover td{background:var(--bg3)}
+.ftype{color:var(--blu)}
+.fconstraint{color:var(--acc);font-size:.6rem}
+
+/* ─── TOOLS VIEW ─── */
+.tools-content{padding:1.5rem 2rem;flex:1}
+.tools-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.tool-card{
+  background:var(--bg2);border:1px solid var(--line);
+  border-radius:var(--r);padding:1.25rem;
+}
+.tc-title{font-family:var(--mono);font-size:.75rem;font-weight:600;color:var(--txt);margin-bottom:.3rem}
+.tc-sub{font-family:var(--mono);font-size:.62rem;color:var(--mute);margin-bottom:1rem;line-height:1.5}
+.tc-btn{
+  background:var(--bg3);border:1px solid var(--line2);
+  color:var(--txt);font-family:var(--mono);font-size:.68rem;font-weight:600;
+  padding:8px 14px;border-radius:var(--r);cursor:pointer;
+  text-transform:uppercase;letter-spacing:.06em;transition:all .2s;
+  display:inline-block;
+}
+.tc-btn:hover{border-color:var(--mute);color:var(--white)}
+.tc-btn.danger{border-color:rgba(201,96,96,.4);color:var(--red)}
+.tc-btn.danger:hover{background:rgba(201,96,96,.1);border-color:var(--red)}
+.tc-btn.primary{background:var(--white);color:var(--bg);border-color:var(--white)}
+.tc-btn.primary:hover{opacity:.88}
+
+textarea.import-area{
+  width:100%;height:120px;background:var(--bg3);border:1px solid var(--line2);
+  color:var(--txt);font-family:var(--mono);font-size:.65rem;
+  padding:.75rem;border-radius:var(--r);resize:vertical;outline:none;
+  margin-bottom:.6rem;
+}
+textarea.import-area:focus{border-color:var(--mute)}
+textarea.import-area::placeholder{color:var(--mute2)}
+
+.tool-log{
+  background:var(--bg3);border:1px solid var(--line2);
+  border-radius:var(--r);padding:.75rem 1rem;
+  font-family:var(--mono);font-size:.65rem;color:var(--mute);
+  min-height:60px;margin-top:.75rem;line-height:1.6;white-space:pre-wrap;
+}
+.log-ok{color:var(--grn)}
+.log-err{color:var(--red)}
+.log-info{color:var(--amb)}
+
+/* ─── MODAL ─── */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.75);
+  z-index:200;display:none;align-items:center;justify-content:center;
+  padding:1rem;backdrop-filter:blur(4px);
+}
+.overlay.open{display:flex}
+.modal{
+  background:var(--bg2);border:1px solid var(--line2);
+  border-radius:8px;width:100%;max-width:560px;max-height:85vh;
+  overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.6);
+}
+.modal::-webkit-scrollbar{width:4px}
+.modal::-webkit-scrollbar-thumb{background:var(--line2)}
+.mh{
+  padding:1.25rem 1.5rem;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;background:var(--bg2);z-index:1;
+}
+.mh-title{font-family:var(--mono);font-size:.82rem;font-weight:600;color:var(--white)}
+.mh-close{
+  background:none;border:none;color:var(--mute);font-size:1.3rem;
+  cursor:pointer;line-height:1;padding:2px 6px;
+}
+.mh-close:hover{color:var(--txt)}
+.mb{padding:1.25rem 1.5rem}
+
+/* ─── TOAST ─── */
+.toast{
+  position:fixed;bottom:1.5rem;right:1.5rem;
+  background:var(--bg4);border:1px solid var(--line2);
+  color:var(--txt);font-family:var(--mono);font-size:.72rem;
+  padding:.7rem 1.2rem;border-radius:var(--r);z-index:999;
+  transform:translateY(80px);opacity:0;transition:all .25s;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:320px;
+}
+.toast.show{transform:translateY(0);opacity:1}
+
+/* empty state */
+.empty{
+  text-align:center;padding:3rem 2rem;
+  font-family:var(--mono);font-size:.8rem;color:var(--mute);
+}
+.empty-icon{font-size:2rem;margin-bottom:.75rem;opacity:.4}
+.empty-txt{margin-bottom:.4rem;color:var(--mute)}
+.empty-sub{font-size:.65rem}
+
+/* scrollbar global */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+
+/* responsive */
+@media(max-width:900px){
+  .sidebar{width:190px}
+  .stat-row{grid-template-columns:1fr 1fr}
+  .charts-row{grid-template-columns:1fr 1fr}
+  .tools-grid{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .sidebar{display:none}
+  .stat-row{grid-template-columns:1fr 1fr}
+  .charts-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="tb-left">
+    <div class="db-icon">DB</div>
+    <div>
+      <div class="db-name">dif_requests_v1</div>
+      <div class="db-sub">LocalStorage · JSON Store</div>
+    </div>
+  </div>
+  <div class="tb-right">
+    <div class="sync-dot"></div>
+    <span class="sync-label">CONNECTED</span>
+    <button class="tb-btn" onclick="refreshAll()">↻ Sync</button>
+    <a href="index.html" class="app-link">← App Principal</a>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <!-- DB Stats -->
+    <div class="sb-section">
+      <div class="sb-label">Base de Datos</div>
+      <div class="db-stat"><span class="db-stat-key">Registros</span><span class="db-stat-val" id="sb-total">0</span></div>
+      <div class="db-stat"><span class="db-stat-key">Pendientes</span><span class="db-stat-val" style="color:var(--amb)" id="sb-pend">0</span></div>
+      <div class="db-stat"><span class="db-stat-key">Aprobados</span><span class="db-stat-val" style="color:var(--grn)" id="sb-appr">0</span></div>
+      <div class="db-stat"><span class="db-stat-key">Rechazados</span><span class="db-stat-val" style="color:var(--red)" id="sb-reje">0</span></div>
+      <div class="db-stat"><span class="db-stat-key">Tamaño</span><span class="db-stat-val" id="sb-size">0 KB</span></div>
+      <div class="db-stat"><span class="db-stat-key">Actualizado</span><span class="db-stat-val" id="sb-updated">—</span></div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="sb-section">
+      <div class="sb-label">Navegación</div>
+      <div class="nav-item active" onclick="switchView('dashboard')" id="nav-dashboard">
+        <span class="nav-icon">▦</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="switchView('records')" id="nav-records">
+        <span class="nav-icon">≡</span> Registros
+        <span class="nav-badge" id="pend-badge" style="display:none">0</span>
+      </div>
+      <div class="nav-item" onclick="switchView('schema')" id="nav-schema">
+        <span class="nav-icon">◈</span> Schema / ERD
+      </div>
+      <div class="nav-item" onclick="switchView('tools')" id="nav-tools">
+        <span class="nav-icon">⚙</span> Herramientas
+      </div>
+    </div>
+
+    <!-- Schema mini -->
+    <div class="sb-section" style="flex:1">
+      <div class="sb-label">Estructura</div>
+      <div class="schema-mini">
+        <div class="schema-table">
+          <div class="schema-tname">SOLICITUDES</div>
+          <div class="schema-field"><span class="sf-pk">PK</span> id</div>
+          <div class="schema-field"><span class="sf-type">··</span> agenteName</div>
+          <div class="schema-field"><span class="sf-type">··</span> referencia</div>
+          <div class="schema-field"><span class="sf-type">··</span> dot</div>
+          <div class="schema-field"><span class="sf-type">··</span> status</div>
+          <div class="schema-field"><span class="sf-type">··</span> submittedAt</div>
+          <div class="schema-field"><span class="sf-type">··</span> evalReason</div>
+          <div class="schema-field"><span class="sf-type">··</span> reviewNotes</div>
+        </div>
+        <div style="padding-left:.75rem;color:var(--mute2);font-size:.6rem">↳ 1:N</div>
+        <div class="schema-table" style="margin-top:.3rem">
+          <div class="schema-tname">PAGOS[ ]</div>
+          <div class="schema-field"><span class="sf-fk">FK</span> solicitudId</div>
+          <div class="schema-field"><span class="sf-type">··</span> compania</div>
+          <div class="schema-field"><span class="sf-type">··</span> financiera</div>
+          <div class="schema-field"><span class="sf-type">··</span> billing</div>
+          <div class="schema-field"><span class="sf-type">··</span> totalDP</div>
+          <div class="schema-field"><span class="sf-type">··</span> pctP1</div>
+          <div class="schema-field"><span class="sf-type">··</span> diasP2</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <div class="view active" id="view-dashboard">
+      <div class="view-header">
+        <div>
+          <div class="vh-title">Dashboard</div>
+          <div class="vh-sub">Resumen y métricas del sistema de diferidos</div>
+        </div>
+        <div class="vh-actions">
+          <button class="tb-btn" onclick="seedDemoData()">+ Cargar datos demo</button>
+        </div>
+      </div>
+      <div class="view-content">
+        <!-- Stats -->
+        <div class="stat-row">
+          <div class="stat-card" style="--card-accent:var(--txt)">
+            <div class="sc-label">Total Solicitudes</div>
+            <div class="sc-num" id="d-total">0</div>
+            <div class="sc-sub">en base de datos</div>
+          </div>
+          <div class="stat-card" style="--card-accent:var(--amb)">
+            <div class="sc-label">Pendientes</div>
+            <div class="sc-num" id="d-pend">0</div>
+            <div class="sc-sub">requieren revisión</div>
+          </div>
+          <div class="stat-card" style="--card-accent:var(--grn)">
+            <div class="sc-label">Aprobadas</div>
+            <div class="sc-num" id="d-appr">0</div>
+            <div class="sc-sub">auto + manual</div>
+          </div>
+          <div class="stat-card" style="--card-accent:var(--red)">
+            <div class="sc-label">Rechazadas</div>
+            <div class="sc-num" id="d-reje">0</div>
+            <div class="sc-sub">por área créditos</div>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-row">
+          <!-- Status distribution -->
+          <div class="chart-card">
+            <div class="chart-title">Distribución por Estado</div>
+            <div id="chart-status"></div>
+          </div>
+          <!-- Billing type -->
+          <div class="chart-card">
+            <div class="chart-title">Tipo de Facturación</div>
+            <div id="chart-billing"></div>
+          </div>
+          <!-- Timeline -->
+          <div class="chart-card">
+            <div class="chart-title">Solicitudes — Últimos 14 Días</div>
+            <div id="chart-timeline"></div>
+          </div>
+        </div>
+
+        <!-- Recent -->
+        <div class="recent-card">
+          <div class="chart-title" style="margin-bottom:.75rem">Actividad Reciente</div>
+          <div id="recent-list"></div>
+        </div>
+
+        <!-- Company breakdown -->
+        <div class="recent-card">
+          <div class="chart-title" style="margin-bottom:.75rem">Top Compañías de Seguros</div>
+          <div id="chart-companies"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ RECORDS ═══ -->
+    <div class="view" id="view-records">
+      <div class="view-header">
+        <div>
+          <div class="vh-title">Registros</div>
+          <div class="vh-sub" id="rec-count-label">0 registros en total</div>
+        </div>
+        <div class="vh-actions">
+          <button class="tb-btn" onclick="exportCSV()">↓ CSV</button>
+          <button class="tb-btn" onclick="exportJSON()">↓ JSON</button>
+        </div>
+      </div>
+      <div class="records-toolbar">
+        <input type="text" class="t-search" id="rec-search" placeholder="Buscar por ID, agente, referencia, DOT…" oninput="renderRecords()">
+        <select class="t-filter" id="rec-status" onchange="renderRecords()">
+          <option value="">Todos los estados</option>
+          <option value="pending">Pendiente</option>
+          <option value="approved">Aprobado</option>
+          <option value="rejected">Rechazado</option>
+        </select>
+        <select class="t-filter" id="rec-billing" onchange="renderRecords()">
+          <option value="">Cualquier facturación</option>
+          <option value="direct_bill">Direct Bill</option>
+          <option value="agency_bill">Agency Bill</option>
+        </select>
+        <span class="t-count" id="rec-count">0 resultados</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th onclick="setSort('id')" id="th-id">ID <span class="sort-arrow"></span></th>
+              <th onclick="setSort('agenteName')" id="th-agenteName">Agente <span class="sort-arrow"></span></th>
+              <th onclick="setSort('referencia')" id="th-referencia">Referencia <span class="sort-arrow"></span></th>
+              <th>DOT</th>
+              <th>Compañía</th>
+              <th>Financiera</th>
+              <th>Total DP</th>
+              <th onclick="setSort('submittedAt')" id="th-submittedAt">Enviada <span class="sort-arrow">↓</span></th>
+              <th onclick="setSort('status')" id="th-status">Estado <span class="sort-arrow"></span></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rec-tbody"></tbody>
+        </table>
+        <div id="rec-empty" class="empty" style="display:none">
+          <div class="empty-icon">◻</div>
+          <div class="empty-txt">No se encontraron registros</div>
+          <div class="empty-sub">Intente con otros filtros o cargue datos desde la app principal</div>
+        </div>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+    <!-- ═══ SCHEMA ═══ -->
+    <div class="view" id="view-schema">
+      <div class="view-header">
+        <div>
+          <div class="vh-title">Schema / ERD</div>
+          <div class="vh-sub">Estructura de la base de datos — Entity Relationship Diagram</div>
+        </div>
+      </div>
+      <div class="schema-content">
+        <!-- ERD -->
+        <div class="schema-erd">
+          <!-- Table: SOLICITUDES -->
+          <div class="erd-table">
+            <div class="erd-thead">
+              <div class="tbl-icon">S</div>
+              SOLICITUDES
+            </div>
+            <div class="erd-row"><div class="erd-key k-pk">PK</div><div class="erd-fname">id</div><div class="erd-ftype">VARCHAR</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">submittedAt</div><div class="erd-ftype">DATETIME</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">status</div><div class="erd-ftype">ENUM</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">evalReason</div><div class="erd-ftype">TEXT</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">scenario</div><div class="erd-ftype">VARCHAR</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">agenteName</div><div class="erd-ftype">VARCHAR</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">agenteEmail</div><div class="erd-ftype">VARCHAR</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">referencia</div><div class="erd-ftype">VARCHAR</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">dot</div><div class="erd-ftype">VARCHAR</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">reviewNotes</div><div class="erd-ftype">TEXT</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">reviewedAt</div><div class="erd-ftype">DATETIME</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">payments[ ]</div><div class="erd-ftype" style="color:var(--blu)">→ PAGOS</div></div>
+          </div>
+
+          <!-- Relation -->
+          <div class="rel-arrow">
+            <div class="rel-label">1</div>
+            <div class="rel-line"></div>
+            <div class="rel-tip" style="font-size:1rem">⟶</div>
+            <div class="rel-line"></div>
+            <div class="rel-label">N</div>
+            <div style="font-family:var(--mono);font-size:.6rem;color:var(--mute);margin-top:8px;text-align:center">Una solicitud<br>tiene N pagos</div>
+          </div>
+
+          <!-- Table: PAGOS -->
+          <div class="erd-table">
+            <div class="erd-thead">
+              <div class="tbl-icon" style="background:var(--blu)">P</div>
+              PAGOS (Nested Array)
+            </div>
+            <div class="erd-row"><div class="erd-key k-fk">FK</div><div class="erd-fname">solicitudId</div><div class="erd-ftype">VARCHAR</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">compania</div><div class="erd-ftype">VARCHAR</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">financiera</div><div class="erd-ftype">VARCHAR</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">billing</div><div class="erd-ftype">ENUM</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">selfFin</div><div class="erd-ftype">BOOLEAN</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">totalDP</div><div class="erd-ftype">DECIMAL</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">fechaP1</div><div class="erd-ftype">DATE</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">pctP1</div><div class="erd-ftype">INTEGER</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">diasP2</div><div class="erd-ftype">INTEGER</div></div>
+            <div class="erd-row"><div class="erd-key k-blank"></div><div class="erd-fname">comentarios</div><div class="erd-ftype">TEXT</div></div>
+          </div>
+        </div>
+
+        <!-- Field reference -->
+        <div class="chart-title" style="margin-bottom:.75rem;font-size:.7rem">Referencia de Campos — SOLICITUDES</div>
+        <table class="ref-table" style="margin-bottom:1.5rem">
+          <thead><tr><th>Campo</th><th>Tipo</th><th>Restricción</th><th>Descripción</th></tr></thead>
+          <tbody>
+            <tr><td>id</td><td class="ftype">VARCHAR</td><td class="fconstraint">PK, NOT NULL</td><td class="muted">ID único. Formato: DIF-{timestamp}</td></tr>
+            <tr><td>submittedAt</td><td class="ftype">DATETIME</td><td class="fconstraint">NOT NULL</td><td class="muted">Fecha y hora de envío (ISO 8601)</td></tr>
+            <tr><td>status</td><td class="ftype">ENUM</td><td class="fconstraint">NOT NULL</td><td class="muted">pending | approved | rejected</td></tr>
+            <tr><td>evalReason</td><td class="ftype">TEXT</td><td class="fconstraint">nullable</td><td class="muted">Motivo de la evaluación automática (escenario)</td></tr>
+            <tr><td>scenario</td><td class="ftype">VARCHAR</td><td class="fconstraint">nullable</td><td class="muted">Escenario aplicado: 1, 2, 3, 4, 5, 6, Special</td></tr>
+            <tr><td>agenteName</td><td class="ftype">VARCHAR</td><td class="fconstraint">NOT NULL</td><td class="muted">Nombre del agente comercial que envió la solicitud</td></tr>
+            <tr><td>agenteEmail</td><td class="ftype">VARCHAR</td><td class="fconstraint">NOT NULL</td><td class="muted">Correo del agente para notificaciones</td></tr>
+            <tr><td>referencia</td><td class="ftype">VARCHAR</td><td class="fconstraint">NOT NULL</td><td class="muted">Referencia del cliente o póliza</td></tr>
+            <tr><td>dot</td><td class="ftype">VARCHAR</td><td class="fconstraint">NOT NULL</td><td class="muted">Número DOT del cliente</td></tr>
+            <tr><td>reviewNotes</td><td class="ftype">TEXT</td><td class="fconstraint">nullable</td><td class="muted">Notas del revisor del área de créditos</td></tr>
+            <tr><td>reviewedAt</td><td class="ftype">DATETIME</td><td class="fconstraint">nullable</td><td class="muted">Fecha y hora de revisión por créditos</td></tr>
+            <tr><td>payments</td><td class="ftype">JSON[]</td><td class="fconstraint">NOT NULL</td><td class="muted">Array de objetos PAGO (ver tabla inferior)</td></tr>
+          </tbody>
+        </table>
+
+        <div class="chart-title" style="margin-bottom:.75rem;font-size:.7rem">Referencia de Campos — PAGOS (objeto anidado)</div>
+        <table class="ref-table">
+          <thead><tr><th>Campo</th><th>Tipo</th><th>Restricción</th><th>Descripción</th></tr></thead>
+          <tbody>
+            <tr><td>compania</td><td class="ftype">VARCHAR</td><td class="fconstraint">NOT NULL</td><td class="muted">Nombre de la compañía de seguros</td></tr>
+            <tr><td>financiera</td><td class="ftype">VARCHAR</td><td class="fconstraint">nullable</td><td class="muted">Nombre de la financiera o MGA</td></tr>
+            <tr><td>billing</td><td class="ftype">ENUM</td><td class="fconstraint">NOT NULL</td><td class="muted">direct_bill | agency_bill</td></tr>
+            <tr><td>selfFin</td><td class="ftype">BOOLEAN</td><td class="fconstraint">default: false</td><td class="muted">true si la compañía se autofinancia</td></tr>
+            <tr><td>totalDP</td><td class="ftype">DECIMAL(10,2)</td><td class="fconstraint">NOT NULL, >0</td><td class="muted">Total del Down Payment en USD</td></tr>
+            <tr><td>fechaP1</td><td class="ftype">DATE</td><td class="fconstraint">NOT NULL</td><td class="muted">Fecha del primer pago (YYYY-MM-DD)</td></tr>
+            <tr><td>pctP1</td><td class="ftype">INTEGER</td><td class="fconstraint">≥70 agency, =100 direct</td><td class="muted">Porcentaje del primer pago</td></tr>
+            <tr><td>diasP2</td><td class="ftype">INTEGER</td><td class="fconstraint">1–12</td><td class="muted">Días hasta el segundo pago</td></tr>
+            <tr><td>comentarios</td><td class="ftype">TEXT</td><td class="fconstraint">nullable</td><td class="muted">Notas opcionales del agente</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ TOOLS ═══ -->
+    <div class="view" id="view-tools">
+      <div class="view-header">
+        <div>
+          <div class="vh-title">Herramientas</div>
+          <div class="vh-sub">Exportar, importar, seed de datos y administración de la base de datos</div>
+        </div>
+      </div>
+      <div class="tools-content">
+        <div class="tools-grid">
+          <!-- Export CSV -->
+          <div class="tool-card">
+            <div class="tc-title">↓ Exportar CSV</div>
+            <div class="tc-sub">Descarga todos los registros en formato CSV. Compatible con Excel, Google Sheets y cualquier herramienta de BI.</div>
+            <button class="tc-btn primary" onclick="exportCSV()">Descargar CSV</button>
+          </div>
+          <!-- Export JSON -->
+          <div class="tool-card">
+            <div class="tc-title">↓ Exportar JSON</div>
+            <div class="tc-sub">Descarga el dump completo de la base de datos en formato JSON, incluyendo pagos anidados y metadatos.</div>
+            <button class="tc-btn primary" onclick="exportJSON()">Descargar JSON</button>
+          </div>
+          <!-- Import JSON -->
+          <div class="tool-card">
+            <div class="tc-title">↑ Importar JSON</div>
+            <div class="tc-sub">Restaura registros desde un archivo JSON exportado previamente. Puede hacer merge o reemplazar los datos existentes.</div>
+            <textarea class="import-area" id="import-area" placeholder='Pegue aquí el JSON exportado… [{"id":"DIF-…","status":"pending",…}]'></textarea>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+              <button class="tc-btn" onclick="importJSON('merge')">Merge (combinar)</button>
+              <button class="tc-btn" onclick="importJSON('replace')">Replace (reemplazar)</button>
+            </div>
+            <div class="tool-log" id="import-log">Listo para importar…</div>
+          </div>
+          <!-- Seed Data -->
+          <div class="tool-card">
+            <div class="tc-title">⚡ Datos Demo</div>
+            <div class="tc-sub">Carga registros de ejemplo con diferentes escenarios, compañías y estados para visualizar el sistema en funcionamiento.</div>
+            <button class="tc-btn" onclick="seedDemoData()" style="margin-bottom:.5rem">Cargar Datos Demo</button>
+            <div class="tool-log" id="seed-log">Sin operaciones recientes…</div>
+          </div>
+          <!-- Storage Info -->
+          <div class="tool-card">
+            <div class="tc-title">◈ Información del Storage</div>
+            <div class="tc-sub">Estado actual del almacenamiento localStorage en este navegador.</div>
+            <div class="tool-log" id="storage-log" style="min-height:80px"></div>
+          </div>
+          <!-- Delete All -->
+          <div class="tool-card" style="border-color:rgba(201,96,96,.25)">
+            <div class="tc-title" style="color:var(--red)">⚠ Zona Peligrosa</div>
+            <div class="tc-sub">Elimina todos los registros de la base de datos. Esta acción no se puede deshacer. Se recomienda exportar antes.</div>
+            <button class="tc-btn danger" onclick="clearDB()">Eliminar todos los registros</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL (delete confirm) -->
+<div class="overlay" id="modal">
+  <div class="modal">
+    <div class="mh">
+      <div class="mh-title" id="m-title">Confirmar acción</div>
+      <button class="mh-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="mb" id="m-body"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONSTANTS & STATE
+// ═══════════════════════════════════════════════════════════
+
+const LS_KEY = 'dif_requests_v1';
+const PAGE_SIZE = 20;
+
+let DB = {
+  records: [],
+  view: 'dashboard',
+  sort: { field: 'submittedAt', dir: 'desc' },
+  page: 1,
+  expandedRows: new Set(),
+};
+
+// ═══════════════════════════════════════════════════════════
+// DATA LAYER
+// ═══════════════════════════════════════════════════════════
+
+function loadDB() {
+  try {
+    DB.records = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+  } catch(e) {
+    DB.records = [];
+  }
+}
+
+function saveDB() {
+  localStorage.setItem(LS_KEY, JSON.stringify(DB.records));
+}
+
+function getStorageSize() {
+  const raw = localStorage.getItem(LS_KEY) || '';
+  const bytes = new Blob([raw]).size;
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(2) + ' MB';
+}
+
+function getLastUpdated() {
+  if (!DB.records.length) return '—';
+  const latest = DB.records.reduce((a, b) =>
+    new Date(a.submittedAt) > new Date(b.submittedAt) ? a : b
+  );
+  return fmtDt(latest.submittedAt);
+}
+
+// ═══════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════
+
+function switchView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.getElementById('nav-'+v).classList.add('active');
+  DB.view = v;
+  renderView(v);
+}
+
+function renderView(v) {
+  if (v === 'dashboard') renderDashboard();
+  if (v === 'records')   { DB.page = 1; renderRecords(); }
+  if (v === 'tools')     renderTools();
+}
+
+function refreshAll() {
+  loadDB();
+  updateSidebar();
+  renderView(DB.view);
+  toast('Base de datos sincronizada');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SIDEBAR
+// ═══════════════════════════════════════════════════════════
+
+function updateSidebar() {
+  const pend = DB.records.filter(r=>r.status==='pending').length;
+  const appr = DB.records.filter(r=>r.status==='approved').length;
+  const reje = DB.records.filter(r=>r.status==='rejected').length;
+  animCount('sb-total', DB.records.length);
+  animCount('sb-pend',  pend);
+  animCount('sb-appr',  appr);
+  animCount('sb-reje',  reje);
+  document.getElementById('sb-size').textContent    = getStorageSize();
+  document.getElementById('sb-updated').textContent = getLastUpdated();
+  const pb = document.getElementById('pend-badge');
+  if (pend > 0) { pb.textContent = pend; pb.style.display = 'inline'; }
+  else pb.style.display = 'none';
+}
+
+function animCount(id, target) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const start = parseInt(el.textContent)||0;
+  const steps = 20, dur = 400;
+  let i = 0;
+  const step = () => {
+    i++;
+    el.textContent = Math.round(start + (target-start)*(i/steps));
+    if (i < steps) setTimeout(step, dur/steps);
+    else el.textContent = target;
+  };
+  step();
+}
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════
+
+function renderDashboard() {
+  const r = DB.records;
+  const pend = r.filter(x=>x.status==='pending').length;
+  const appr = r.filter(x=>x.status==='approved').length;
+  const reje = r.filter(x=>x.status==='rejected').length;
+
+  animCount('d-total', r.length);
+  animCount('d-pend',  pend);
+  animCount('d-appr',  appr);
+  animCount('d-reje',  reje);
+
+  renderChartStatus(pend, appr, reje);
+  renderChartBilling();
+  renderChartTimeline();
+  renderRecent();
+  renderCompanies();
+}
+
+function renderChartStatus(pend, appr, reje) {
+  const el = document.getElementById('chart-status');
+  const total = pend + appr + reje || 1;
+  const bars = [
+    { label:'Pendiente', val:pend, pct:(pend/total*100).toFixed(1), color:'var(--amb)' },
+    { label:'Aprobado',  val:appr, pct:(appr/total*100).toFixed(1), color:'var(--grn)' },
+    { label:'Rechazado', val:reje, pct:(reje/total*100).toFixed(1), color:'var(--red)' },
+  ];
+  el.innerHTML = bars.map(b=>`
+    <div class="bar-group">
+      <div class="bar-label">
+        <span style="color:${b.color}">${b.label}</span>
+        <span>${b.val} (${b.pct}%)</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${b.pct}%;background:${b.color}"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderChartBilling() {
+  const el = document.getElementById('chart-billing');
+  const pays = DB.records.flatMap(r=>r.payments||[]);
+  const direct = pays.filter(p=>p.billing==='direct_bill').length;
+  const agency = pays.filter(p=>p.billing==='agency_bill').length;
+  const total = direct + agency || 1;
+
+  const dPct = Math.round(direct/total*100);
+  const aPct = 100 - dPct;
+
+  // Simple SVG donut
+  const r=36, cx=50, cy=50, stroke=14;
+  const circ = 2*Math.PI*r;
+  const dDash = circ*(dPct/100);
+  const aDash = circ*(aPct/100);
+
+  el.innerHTML = `
+    <div class="donut-wrap">
+      <svg viewBox="0 0 100 100" width="90" height="90" style="flex-shrink:0">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bg4)" stroke-width="${stroke}"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--grn)" stroke-width="${stroke}"
+                stroke-dasharray="${dDash} ${circ}" stroke-dashoffset="${circ*0.25}" stroke-linecap="round"
+                style="transform:rotate(-90deg);transform-origin:50% 50%"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--blu)" stroke-width="${stroke}"
+                stroke-dasharray="${aDash} ${circ}" stroke-dashoffset="${circ*0.25 - dDash}" stroke-linecap="round"
+                style="transform:rotate(-90deg);transform-origin:50% 50%"/>
+        <text x="50" y="54" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" font-weight="600" fill="var(--txt)">${total}</text>
+      </svg>
+      <div class="donut-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--grn)"></div>Direct Bill <span style="color:var(--mute)">${direct}</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--blu)"></div>Agency Bill <span style="color:var(--mute)">${agency}</span></div>
+        <div style="margin-top:.5rem;color:var(--mute);font-size:.6rem">Total pagos:<br>${total}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderChartTimeline() {
+  const el = document.getElementById('chart-timeline');
+  const days = 14;
+  const buckets = [];
+  for (let i=days-1; i>=0; i--) {
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const key = d.toISOString().slice(0,10);
+    const lbl = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    buckets.push({ key, lbl, count:0 });
+  }
+  DB.records.forEach(r => {
+    const key = r.submittedAt?.slice(0,10);
+    const b = buckets.find(x=>x.key===key);
+    if (b) b.count++;
+  });
+  const max = Math.max(...buckets.map(b=>b.count), 1);
+  el.innerHTML = `
+    <div class="tl-bars">
+      ${buckets.map(b=>`
+        <div class="tl-bar"
+             style="height:${Math.max((b.count/max)*64,3)}px;background:${b.count>0?'var(--acc)':'var(--bg4)'}"
+             data-tip="${b.lbl}: ${b.count}">
+        </div>
+      `).join('')}
+    </div>
+    <div class="tl-labels">
+      ${buckets.map((b,i)=>`
+        <div class="tl-lbl">${i%3===0?b.lbl.split(' ')[1]:''}</div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderRecent() {
+  const el = document.getElementById('recent-list');
+  const recent = [...DB.records].sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt)).slice(0,8);
+  if (!recent.length) { el.innerHTML=`<div class="empty"><div class="empty-icon">◻</div><div class="empty-txt">Sin registros aún</div></div>`; return; }
+  el.innerHTML = recent.map(r=>`
+    <div class="recent-row">
+      <span class="rr-id">${r.id}</span>
+      <span class="rr-name">${r.agenteName||'—'} — ${r.referencia||'—'}</span>
+      <span>${bHtml(r.status)}</span>
+      <span class="rr-date">${fmtDt(r.submittedAt)}</span>
+    </div>
+  `).join('');
+}
+
+function renderCompanies() {
+  const el = document.getElementById('chart-companies');
+  const pays = DB.records.flatMap(r=>r.payments||[]);
+  const counts = {};
+  pays.forEach(p=>{ if(p.compania) counts[p.compania]=(counts[p.compania]||0)+1; });
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const max = sorted[0]?.[1]||1;
+  if (!sorted.length) { el.innerHTML=`<div class="empty"><div class="empty-txt">Sin datos de compañías</div></div>`; return; }
+  el.innerHTML = sorted.map(([name,cnt])=>`
+    <div class="bar-group">
+      <div class="bar-label"><span>${name}</span><span>${cnt}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(cnt/max*100).toFixed(1)}%;background:var(--acc)"></div></div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// RECORDS TABLE
+// ═══════════════════════════════════════════════════════════
+
+function setSort(field) {
+  if (DB.sort.field === field) DB.sort.dir = DB.sort.dir==='asc'?'desc':'asc';
+  else { DB.sort.field=field; DB.sort.dir='asc'; }
+  document.querySelectorAll('th.sorted').forEach(th=>{ th.classList.remove('sorted'); th.querySelector('.sort-arrow').textContent=''; });
+  const th = document.getElementById('th-'+field);
+  if (th) {
+    th.classList.add('sorted');
+    th.querySelector('.sort-arrow').textContent = DB.sort.dir==='asc'?'↑':'↓';
+  }
+  renderRecords();
+}
+
+function getFiltered() {
+  const srch = (document.getElementById('rec-search')?.value||'').toLowerCase();
+  const sf   = document.getElementById('rec-status')?.value||'';
+  const bf   = document.getElementById('rec-billing')?.value||'';
+  return DB.records
+    .filter(r => {
+      if (sf && r.status!==sf) return false;
+      if (bf) {
+        const pays = r.payments||[];
+        if (!pays.some(p=>p.billing===bf)) return false;
+      }
+      if (srch) {
+        const hay = [r.id,r.agenteName,r.referencia,r.dot,r.agenteEmail].join(' ').toLowerCase();
+        if (!hay.includes(srch)) return false;
+      }
+      return true;
+    })
+    .sort((a,b) => {
+      let av=a[DB.sort.field]||'', bv=b[DB.sort.field]||'';
+      if (DB.sort.field==='submittedAt'||DB.sort.field==='reviewedAt') { av=new Date(av); bv=new Date(bv); }
+      return DB.sort.dir==='asc' ? (av>bv?1:-1) : (av<bv?1:-1);
+    });
+}
+
+function renderRecords() {
+  const filtered = getFiltered();
+  const total = filtered.length;
+  const pages = Math.ceil(total/PAGE_SIZE)||1;
+  if (DB.page > pages) DB.page = pages;
+
+  document.getElementById('rec-count').textContent = total + ' resultado' + (total!==1?'s':'');
+  document.getElementById('rec-count-label').textContent = DB.records.length + ' registros en total';
+
+  const slice = filtered.slice((DB.page-1)*PAGE_SIZE, DB.page*PAGE_SIZE);
+  const tbody = document.getElementById('rec-tbody');
+  const empty = document.getElementById('rec-empty');
+
+  if (!slice.length) {
+    tbody.innerHTML='';
+    empty.style.display='block';
+    document.getElementById('pagination').innerHTML='';
+    return;
+  }
+  empty.style.display='none';
+
+  tbody.innerHTML = slice.map(r => {
+    const pays = r.payments||[];
+    const firstPay = pays[0]||{};
+    const totalDP = pays.reduce((s,p)=>s+(parseFloat(p.totalDP)||0),0);
+    const isExpanded = DB.expandedRows.has(r.id);
+    let html = `
+      <tr class="${isExpanded?'tr-expanded':''}">
+        <td><button class="expand-btn ${isExpanded?'open':''}" onclick="toggleRow('${r.id}')" title="Ver pagos">▶</button></td>
+        <td class="id-cell">${r.id}</td>
+        <td class="name-cell">${r.agenteName||'—'}</td>
+        <td class="mono" style="font-size:.75rem">${r.referencia||'—'}</td>
+        <td class="mono muted" style="font-size:.72rem">${r.dot||'—'}</td>
+        <td style="font-size:.78rem">${pays.map(p=>`<div>${p.compania||'—'}</div>`).join('')}</td>
+        <td style="font-size:.78rem;color:var(--mute)">${pays.map(p=>`<div>${p.financiera||'Auto'}</div>`).join('')}</td>
+        <td class="mono" style="font-size:.75rem">${fmtM(totalDP)}</td>
+        <td class="date-cell">${fmtDt(r.submittedAt)}</td>
+        <td>${bHtml(r.status)}</td>
+        <td>
+          <button class="expand-btn" onclick="openDeleteModal('${r.id}')" title="Eliminar" style="border-color:rgba(201,96,96,.3);color:var(--red)">✕</button>
+        </td>
+      </tr>
+    `;
+    if (isExpanded) {
+      html += `<tr class="detail-row"><td colspan="11">${renderDetailInner(r)}</td></tr>`;
+    }
+    return html;
+  }).join('');
+
+  renderPagination(pages, total);
+}
+
+function renderDetailInner(r) {
+  const pays = r.payments||[];
+  const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}) : '—';
+
+  const pagoBlocks = pays.map((p,i) => {
+    const total = parseFloat(p.totalDP)||0;
+    const pct   = parseInt(p.pctP1)||70;
+    const p1    = total*(pct/100), p2=total-p1;
+    let f2='—';
+    if(p.fechaP1&&p.diasP2){ const d=new Date(p.fechaP1+'T00:00:00'); d.setDate(d.getDate()+parseInt(p.diasP2)); f2=d.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}); }
+    return `
+      <div class="pago-block">
+        <div class="pago-block-title">Póliza ${i+1} — ${p.compania||'—'}</div>
+        <div class="pago-grid">
+          <div class="di"><div class="di-label">Financiera / MGA</div><div class="di-val">${p.financiera||'Autofinanciada'}</div></div>
+          <div class="di"><div class="di-label">Tipo</div><div class="di-val">${p.billing==='direct_bill'?'Direct Bill':'Agency Bill'}</div></div>
+          <div class="di"><div class="di-label">Total DP</div><div class="di-val" style="color:var(--acc)">${fmtM(total)}</div></div>
+          <div class="di"><div class="di-label">1er Pago (${pct}%)</div><div class="di-val">${fmtM(p1)} · ${fmtD(p.fechaP1)}</div></div>
+          <div class="di"><div class="di-label">2do Pago (${100-pct}%)</div><div class="di-val">${fmtM(p2)} · ${f2}</div></div>
+          <div class="di"><div class="di-label">Días al 2do pago</div><div class="di-val">${p.diasP2||'—'}</div></div>
+          ${p.comentarios?`<div class="di" style="grid-column:1/-1"><div class="di-label">Comentarios</div><div class="di-val" style="color:var(--mute)">${p.comentarios}</div></div>`:''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="detail-inner">
+      <div class="di"><div class="di-label">ID</div><div class="di-val">${r.id}</div></div>
+      <div class="di"><div class="di-label">Correo Agente</div><div class="di-val">${r.agenteEmail||'—'}</div></div>
+      <div class="di"><div class="di-label">Escenario Aplicado</div><div class="di-val">${r.scenario||'—'}</div></div>
+      <div class="di" style="grid-column:1/-1"><div class="di-label">Evaluación del Sistema</div><div class="di-val" style="color:var(--mute)">${r.evalReason||'—'}</div></div>
+      ${r.reviewNotes?`<div class="di" style="grid-column:1/-1"><div class="di-label">Notas de Revisión</div><div class="di-val">${r.reviewNotes}</div></div>`:''}
+      ${r.reviewedAt?`<div class="di"><div class="di-label">Revisado en</div><div class="di-val">${fmtDt(r.reviewedAt)}</div></div>`:''}
+      ${pagoBlocks}
+    </div>
+  `;
+}
+
+function toggleRow(id) {
+  if (DB.expandedRows.has(id)) DB.expandedRows.delete(id);
+  else DB.expandedRows.add(id);
+  renderRecords();
+}
+
+function renderPagination(pages, total) {
+  const pg = document.getElementById('pagination');
+  if (pages<=1) { pg.innerHTML=''; return; }
+  const p = DB.page;
+  let html = `
+    <button class="pg-btn" onclick="goPage(${p-1})" ${p<=1?'disabled':''}>← Prev</button>
+  `;
+  for (let i=1; i<=pages; i++) {
+    if (i===1||i===pages||Math.abs(i-p)<=2) {
+      html += `<button class="pg-btn ${i===p?'active':''}" onclick="goPage(${i})">${i}</button>`;
+    } else if (Math.abs(i-p)===3) {
+      html += `<span class="pg-info">…</span>`;
+    }
+  }
+  html += `
+    <button class="pg-btn" onclick="goPage(${p+1})" ${p>=pages?'disabled':''}>Next →</button>
+    <span class="pg-info">${(p-1)*PAGE_SIZE+1}–${Math.min(p*PAGE_SIZE,total)} de ${total}</span>
+  `;
+  pg.innerHTML = html;
+}
+
+function goPage(n) { DB.page=n; renderRecords(); }
+
+// ═══════════════════════════════════════════════════════════
+// TOOLS
+// ═══════════════════════════════════════════════════════════
+
+function renderTools() {
+  const raw = localStorage.getItem(LS_KEY)||'[]';
+  const bytes = new Blob([raw]).size;
+  const allKeys = Object.keys(localStorage);
+  let allBytes = 0;
+  allKeys.forEach(k=>{ allBytes += new Blob([localStorage.getItem(k)||'']).size; });
+
+  document.getElementById('storage-log').innerHTML = `
+<span class="log-info">Clave:</span>   ${LS_KEY}
+<span class="log-info">Registros:</span> ${DB.records.length}
+<span class="log-info">Tamaño DB:</span> ${(bytes/1024).toFixed(2)} KB
+<span class="log-info">Total localStorage:</span> ${(allBytes/1024).toFixed(2)} KB
+<span class="log-info">Claves en storage:</span> ${allKeys.length}
+  `.trim();
+}
+
+function exportCSV() {
+  if (!DB.records.length) { toast('No hay datos para exportar','warn'); return; }
+  const headers = ['ID','Agente','Email','Referencia','DOT','Estado','Escenario','Evaluacion','NotasRevisión','Enviada','Revisada','#Polizas','Compañía1','Financiera1','Billing1','TotalDP1','PctP1','DiasP2_1','FechaP1_1'];
+  const rows = DB.records.map(r => {
+    const p = (r.payments||[])[0]||{};
+    return [
+      r.id, r.agenteName, r.agenteEmail, r.referencia, r.dot,
+      r.status, r.scenario||'', (r.evalReason||'').replace(/,/g,';'),
+      (r.reviewNotes||'').replace(/,/g,';'),
+      r.submittedAt||'', r.reviewedAt||'',
+      (r.payments||[]).length,
+      p.compania||'', p.financiera||'', p.billing||'',
+      p.totalDP||'', p.pctP1||'', p.diasP2||'', p.fechaP1||''
+    ].map(v=>`"${v}"`).join(',');
+  });
+  dl([headers.join(','), ...rows].join('\n'), 'diferidos_export_'+Date.now()+'.csv', 'text/csv');
+  toast(`CSV exportado — ${DB.records.length} registros`);
+}
+
+function exportJSON() {
+  if (!DB.records.length) { toast('No hay datos para exportar','warn'); return; }
+  dl(JSON.stringify(DB.records, null, 2), 'diferidos_export_'+Date.now()+'.json', 'application/json');
+  toast(`JSON exportado — ${DB.records.length} registros`);
+}
+
+function importJSON(mode) {
+  const txt = document.getElementById('import-area').value.trim();
+  const log = document.getElementById('import-log');
+  if (!txt) { log.innerHTML=`<span class="log-err">Error: el campo está vacío.</span>`; return; }
+  try {
+    const arr = JSON.parse(txt);
+    if (!Array.isArray(arr)) throw new Error('El JSON debe ser un array []');
+    const valid = arr.filter(r=>r.id&&r.status);
+    if (mode==='replace') {
+      DB.records = valid;
+    } else {
+      const existing = new Set(DB.records.map(r=>r.id));
+      const added = valid.filter(r=>!existing.has(r.id));
+      DB.records = [...DB.records, ...added];
+      log.innerHTML=`<span class="log-ok">✓ Merge completado: ${added.length} nuevos registros agregados, ${valid.length-added.length} duplicados ignorados.</span>`;
+      saveDB(); updateSidebar();
+      return;
+    }
+    saveDB(); updateSidebar();
+    log.innerHTML=`<span class="log-ok">✓ ${mode==='replace'?'Replace':'Merge'} completado: ${valid.length} registros cargados.</span>`;
+    document.getElementById('import-area').value='';
+  } catch(e) {
+    log.innerHTML=`<span class="log-err">Error de parseo: ${e.message}</span>`;
+  }
+}
+
+function clearDB() {
+  openConfirmModal(
+    '⚠ Eliminar todos los registros',
+    `<p style="font-family:var(--mono);font-size:.8rem;color:var(--mute);margin-bottom:1rem">Esta acción eliminará <strong style="color:var(--red)">${DB.records.length} registro(s)</strong> permanentemente del almacenamiento local.</p>
+     <p style="font-family:var(--mono);font-size:.75rem;color:var(--mute)">¿Desea continuar?</p>`,
+    () => {
+      DB.records = [];
+      saveDB();
+      updateSidebar();
+      closeModal();
+      renderView(DB.view);
+      toast('Base de datos vaciada', 'warn');
+    }
+  );
+}
+
+function deleteRecord(id) {
+  DB.records = DB.records.filter(r=>r.id!==id);
+  DB.expandedRows.delete(id);
+  saveDB(); updateSidebar(); renderRecords();
+  toast('Registro eliminado');
+}
+
+function openDeleteModal(id) {
+  const r = DB.records.find(x=>x.id===id);
+  if (!r) return;
+  openConfirmModal(
+    'Eliminar registro',
+    `<div style="font-family:var(--mono);font-size:.8rem">
+       <div style="margin-bottom:.75rem"><span style="color:var(--mute)">ID:</span> ${r.id}</div>
+       <div style="margin-bottom:.75rem"><span style="color:var(--mute)">Agente:</span> ${r.agenteName}</div>
+       <div style="margin-bottom:1rem"><span style="color:var(--mute)">Ref.:</span> ${r.referencia}</div>
+       <div style="color:var(--red);font-size:.75rem">Esta acción no se puede deshacer.</div>
+     </div>`,
+    () => { deleteRecord(id); closeModal(); }
+  );
+}
+
+function dl(content, filename, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content],{type}));
+  a.download = filename;
+  a.click();
+}
+
+// SEED DEMO DATA
+function seedDemoData() {
+  const log = document.getElementById('seed-log');
+  const demos = [
+    { status:'approved', agenteName:'Maria Lopez', agenteEmail:'mlopez@agency.com', referencia:'REF-001', dot:'DOT-1234567', pays:[{compania:'National General',financiera:'IPFS',billing:'agency_bill',selfFin:false,totalDP:2500,fechaP1:'2025-05-10',pctP1:75,diasP2:10,comentarios:''}], reason:'Agency bill ≥70%', sc:2 },
+    { status:'pending',  agenteName:'Carlos Ruiz',  agenteEmail:'cruiz@agency.com',  referencia:'REF-002', dot:'DOT-2345678', pays:[{compania:'Progressive',financiera:'Progressive',billing:'agency_bill',selfFin:false,totalDP:3800,fechaP1:'2025-05-12',pctP1:70,diasP2:12,comentarios:'Cliente nuevo'}], reason:'Progressive detectado', sc:'Special' },
+    { status:'approved', agenteName:'Ana Torres',   agenteEmail:'atorres@agency.com', referencia:'REF-003', dot:'DOT-3456789', pays:[{compania:'Gainsco',financiera:'',billing:'direct_bill',selfFin:true,totalDP:1800,fechaP1:'2025-05-08',pctP1:100,diasP2:7,comentarios:''}], reason:'Direct bill 100%', sc:1 },
+    { status:'rejected', agenteName:'Luis Mendez',  agenteEmail:'lmendez@agency.com', referencia:'REF-004', dot:'DOT-4567890', pays:[{compania:'Kemper',financiera:'First Insurance Funding (FIFC)',billing:'agency_bill',selfFin:false,totalDP:4200,fechaP1:'2025-05-05',pctP1:70,diasP2:8,comentarios:''}], reason:'No aprobado por créditos', sc:2 },
+    { status:'pending',  agenteName:'Sofia Jimenez',agenteEmail:'sjimenez@agency.com',referencia:'REF-005', dot:'DOT-5678901', pays:[{compania:'Bristol West',financiera:'',billing:'direct_bill',selfFin:true,totalDP:3200,fechaP1:'2025-05-14',pctP1:80,diasP2:5,comentarios:'Solicitó ajuste'}], reason:'Direct bill <100%', sc:6 },
+    { status:'approved', agenteName:'Pedro Garcia',  agenteEmail:'pgarcia@agency.com', referencia:'REF-006', dot:'DOT-6789012', pays:[{compania:'Gainsco',financiera:'',billing:'direct_bill',selfFin:true,totalDP:2100,fechaP1:'2025-05-01',pctP1:100,diasP2:10,comentarios:''},{compania:'National General',financiera:'AFCO Credit Corporation',billing:'agency_bill',selfFin:false,totalDP:1500,fechaP1:'2025-05-01',pctP1:70,diasP2:10,comentarios:''}], reason:'Direct+Agency bill OK', sc:3 },
+    { status:'approved', agenteName:'Laura Perez',   agenteEmail:'lperez@agency.com',  referencia:'REF-007', dot:'DOT-7890123', pays:[{compania:'Markel',financiera:'Burns & Wilcox',billing:'agency_bill',selfFin:false,totalDP:5500,fechaP1:'2025-04-28',pctP1:80,diasP2:11,comentarios:'Flota comercial'}], reason:'Agency bill ≥70%', sc:2 },
+    { status:'pending',  agenteName:'Diego Vargas',  agenteEmail:'dvargas@agency.com', referencia:'REF-008', dot:'DOT-8901234', pays:[{compania:'Travelers',financiera:'Progressive',billing:'agency_bill',selfFin:false,totalDP:6800,fechaP1:'2025-05-13',pctP1:70,diasP2:9,comentarios:'Revisión urgente'}], reason:'Progressive detectado', sc:'Special' },
+  ];
+
+  let added=0;
+  const existing = new Set(DB.records.map(r=>r.referencia));
+  demos.forEach(d => {
+    if (existing.has(d.referencia)) return;
+    const offset = Math.floor(Math.random()*14);
+    const dt = new Date(); dt.setDate(dt.getDate()-offset);
+    DB.records.unshift({
+      id: 'DIF-'+Date.now()+Math.floor(Math.random()*1000),
+      submittedAt: dt.toISOString(),
+      status: d.status, evalReason: d.reason, scenario: d.sc,
+      agenteName: d.agenteName, agenteEmail: d.agenteEmail,
+      referencia: d.referencia, dot: d.dot,
+      payments: d.pays,
+      reviewNotes: d.status==='rejected'?'No cumple condiciones de pago del diferido':'',
+      reviewedAt: d.status!=='pending' ? new Date(dt.getTime()+3600000).toISOString() : null,
+    });
+    added++;
+  });
+
+  saveDB(); updateSidebar(); renderDashboard();
+  if (log) log.innerHTML = `<span class="log-ok">✓ ${added} registros demo agregados correctamente.</span>`;
+  toast(`${added} registros demo cargados`);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════════════════════════
+
+let modalCallback = null;
+function openConfirmModal(title, body, onConfirm) {
+  document.getElementById('m-title').textContent = title;
+  document.getElementById('m-body').innerHTML = body + `
+    <div style="display:flex;gap:.6rem;margin-top:1.25rem">
+      <button class="tc-btn danger" onclick="modalCallback()" style="font-size:.72rem">Confirmar</button>
+      <button class="tc-btn" onclick="closeModal()" style="font-size:.72rem">Cancelar</button>
+    </div>
+  `;
+  modalCallback = onConfirm;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+document.getElementById('modal').addEventListener('click',function(e){ if(e.target===this) closeModal(); });
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function fmtDt(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function fmtM(n) {
+  return parseFloat(n||0).toLocaleString('en-US',{style:'currency',currency:'USD'});
+}
+
+function bHtml(s) {
+  if (s==='approved') return `<span class="sb sb-appr">Aprobado</span>`;
+  if (s==='rejected') return `<span class="sb sb-reje">Rechazado</span>`;
+  return `<span class="sb sb-pend">Pendiente</span>`;
+}
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = type==='warn'?'rgba(212,168,67,.4)':type==='err'?'rgba(201,96,96,.4)':'var(--line2)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3200);
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+
+(function init() {
+  loadDB();
+  updateSidebar();
+  renderDashboard();
+  // Auto-refresh every 5s
+  setInterval(() => {
+    const prev = DB.records.length;
+    loadDB();
+    if (DB.records.length !== prev) {
+      updateSidebar();
+      if (DB.view==='dashboard') renderDashboard();
+      if (DB.view==='records')   renderRecords();
+    }
+  }, 5000);
+})();
+</script>
+</body>
+</html>
